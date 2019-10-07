@@ -4,7 +4,9 @@ import numpy as np
 from PIL import Image
 import torch
 from torch.utils.data import Dataset
+from glob import glob
 import random
+import scipy.misc
 
 
 class ref_dataset(Dataset):
@@ -20,14 +22,31 @@ class ref_dataset(Dataset):
         self.rf_transform = rf_transform
         self.real = real
         if real:
-            self.ids = sorted(os.listdir(root))
+            self.ids = []
+            img_names = glob(root+'/*.npy')
+            img_names.sort()
+            mask_names = glob(root+'/mask' + '/*mask.png')
+            mask_names.sort()
+            for tmp_mask in mask_names:
+                tmp_M = root + '/IMG_' + tmp_mask[-18:-14] + '.npy'
+                tmp_R = root + '/IMG_' + tmp_mask[-13:-9] + '.npy'
+                if os.path.isfile(tmp_M) and os.path.isfile(tmp_R):
+                    self.ids.append([tmp_M, tmp_mask])
+                else:
+                    print(tmp_M, tmp_R, tmp_mask, 'not exist...')
+                    raise Exception('M/R/Mask not exist')
+            print("Data load succeed!")
         else:
             self.ids = sorted(os.listdir(os.path.join(root, 'I')))
 
     def __getitem__(self, index):
-        img = self.ids[index]
+        img, mask= self.ids[index]
         if self.real:
-            input = Image.open(os.path.join(self.root, img)).convert('RGB')
+            # input = Image.open(os.path.join(self.root, img)).convert('RGB')
+            input = np.load(img)[0,:,:,-1]# (1024, 1224) H*W
+            tmp_mask=scipy.misc.imread(mask,'L')[::2,::2,np.newaxis]/255.
+            input = input[:,:,np.newaxis]*tmp_mask # crop valid region
+            input = np.tile(input,[1,1,3])
             if self.transform is not None:
                 input = self.transform(input)
             return input

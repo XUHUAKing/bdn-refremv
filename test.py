@@ -42,6 +42,8 @@ parser.add_argument(
     default='batch',
     help='instance normalization or batch normalization')
 parser.add_argument(
+    '--map_cpu', action='store_true', help='map storage to CPU')
+parser.add_argument(
     '--use_dropout', action='store_true', help='use dropout for the generator')
 parser.add_argument(
     '--imageSize',
@@ -77,13 +79,16 @@ ngf = 64
 netG = network.define_G(nc, nc, ngf, opt.which_model_netG, opt.ns, opt.norm,
                         opt.use_dropout, [], opt.iteration)
 if opt.netG != '':
-    netG.load_state_dict(torch.load(opt.netG))
+    if opt.map_cpu:
+        netG.load_state_dict(torch.load(opt.netG, map_location=torch.device('cpu')))
+    else:
+        netG.load_state_dict(torch.load(opt.netG))
 
 transform = transforms.Compose([
     # transforms.Scale(opt.imageSize),
     # transforms.CenterCrop(opt.imageSize),
     transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
 
 dataset = ref_dataset(
@@ -101,12 +106,14 @@ dataloader = torch.utils.data.DataLoader(
     num_workers=int(opt.workers))
 
 input = torch.FloatTensor(opt.batchSize, 3, opt.imageSize, opt.imageSize)
-input = input.cuda()
-netG.cuda()
+if not opt.map_cpu:
+    input = input.cuda()
+    netG.cuda()
 netG.eval()
 
 criterion = nn.MSELoss()
-criterion.cuda()
+if not opt.map_cpu:
+    criterion.cuda()
 
 for i, data in enumerate(dataloader, 1):
     if opt.real:
